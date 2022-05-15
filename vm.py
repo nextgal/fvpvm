@@ -290,12 +290,13 @@ class vm():
                     pass
                 elif(op == vmOPCode.OP_RET):
                     print()
+                    assert(self.stack[self.sp].type == vmVarType.T_RET)
                     s1 = self.popStack()
-                    assert(s1.type == vmVarType.T_INT)
                     self.moveIP(s1.data)
                     pass
                 elif(op == vmOPCode.OP_RET2):
                     print()
+                    raise NotImplementedError
                     pass
                 elif(op == vmOPCode.OP_JMP):
                     arg1 = self.byteCode.readX32()
@@ -392,9 +393,11 @@ class vm():
                     self.ip += 1
                     pass
                 elif(op == vmOPCode.OP_PUSHTOP):
+                    raise NotImplementedError
                     print()
                     pass
                 elif(op == vmOPCode.OP_PUSHTEMP):
+                    raise NotImplementedError
                     print()
                     pass
                 elif(op == vmOPCode.OP_POPGLOBAL):
@@ -425,6 +428,7 @@ class vm():
                     pass
                 elif(op == vmOPCode.OP_NEG):
                     print()
+                    raise NotImplementedError
                     pass
                 elif(op == vmOPCode.OP_ADD):
                     arg1 = self.popStack().data
@@ -455,36 +459,47 @@ class vm():
                     pass
                 elif(op == vmOPCode.OP_DIV):
                     print()
+                    raise NotImplementedError
                     pass
                 elif(op == vmOPCode.OP_MOD):
                     print()
+                    raise NotImplementedError
                     pass
                 elif(op == vmOPCode.OP_TEST):
                     print()
+                    raise NotImplementedError
                     pass
                 elif(op == vmOPCode.OP_LEGEND):
                     print()
+                    raise NotImplementedError
                     pass
                 elif(op == vmOPCode.OP_LOGOR):
                     print()
+                    raise NotImplementedError
                     pass
                 elif(op == vmOPCode.OP_EQ):
                     print()
+                    raise NotImplementedError
                     pass
                 elif(op == vmOPCode.OP_NEQ):
                     print()
+                    raise NotImplementedError
                     pass
                 elif(op == vmOPCode.OP_QT):
                     print()
+                    raise NotImplementedError
                     pass
                 elif(op == vmOPCode.OP_LE):
                     print()
+                    raise NotImplementedError
                     pass
                 elif(op == vmOPCode.OP_LT):
                     print()
+                    raise NotImplementedError
                     pass
                 elif(op == vmOPCode.OP_GE):
                     print()
+                    raise NotImplementedError
                     pass
                 s = input(">")
                 # debugger
@@ -495,6 +510,11 @@ class vm():
                 elif(len(s) >= 1 and s[0]=="i"):
                     self.printImportTable()
                     pass
+                elif(len(s) >= 1 and s[0]=="?"):
+                    print(r" 'p' for print reg. and stack")
+                    print(r" 'g' for print global variables")
+                    print(r" 'i' for print FVP import table")
+                    pass
         except Exception:
             print("Occurred a Python exception.")
             self.printRegisterAndStack()
@@ -503,9 +523,16 @@ class vm():
             raise Exception
         pass
 
-fvm = vm(sys.argv[1])
+def main():
+    fvm = vm(sys.argv[1])
+    print("pFVPvm - A Python FVP VM and debuggger")
+    print("Game title: {}".format(fvm.gameTitle))
+    print(r"Press '?' for help")
 
-print("pFVPvm - A Python FVP VM and debuggger")
-print("Game title: {}".format(fvm.gameTitle))
+    fvm.runVM()
 
-fvm.runVM()
+try:
+    main()
+except KeyboardInterrupt:
+    print("\n\nBye.")
+    exit(0)
