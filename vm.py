@@ -4,7 +4,7 @@
 import struct
 import sys
 import os
-from enum import Enum
+from enum import Enum,unique
 from array import array
 
 class seekPosition(Enum):
@@ -88,6 +88,7 @@ class hcbReader():
     def getRAWArray(self):
         return self.file
     
+@unique
 class vmVarType(Enum):
     T_TRUE = 1,
     T_FALSE = 2,
@@ -97,6 +98,7 @@ class vmVarType(Enum):
     T_RET = 6,
     T_UNDEF = 7     # FVP 自然可没有这个，这个仅用于构造类
 
+@unique
 class vmOPArg(Enum):
     ARG_NULL = 0,
     ARG_X32 = 1,
@@ -107,6 +109,7 @@ class vmOPArg(Enum):
     ARG_STRING = 6,
     ARG_UNDEF = 7       # 同上
 
+@unique
 class vmOPCode(Enum):
     OP_NOP = 0x0
     OP_INITSTACK = 0x1
@@ -157,30 +160,19 @@ class vmOPDef():
 
 
 class vmStackEntry():
-    def __init__(Stype: vmVarType, Sdata: int = 0):
+    def __init__(self,Stype: vmVarType, Sdata: int):
         self.type = Stype
         self.data = Sdata
 
 
 class vmStackFrame():
-    def __init__(OrigSP: int, RetP: int):
+    def __init__(self,OrigSP: int, RetP: int):
         self.sp = OrigSP
         self.rp = RetP
 
-class vmContext():
-    def __init__(self):
-        self.hcbBuf = bytearray()
-        self.ip = 0    # instruction ptr
-        self.sp = 0    # stack position / ptr
-        self.frameNum = 0   # stack frame?
-        self.status = 0
-        self.qScanState = 0
-        self.stack = vmStackEntry[16]
-        self.stackFrame = vmStackFrame[3]
-
-
-class vm(vmContext):
+class vm():
     def __init__(self,filename):
+        self.vm_debug = False
         self.byteCode = hcbReader(filename)
         self.headerOffset = self.byteCode.readU32()
         self.byteCode.seek(self.headerOffset, seekPosition.SEEK_SET)
@@ -191,114 +183,246 @@ class vm(vmContext):
         self.titleLen = self.byteCode.readU8()
         self.gameTitle = self.byteCode.readString(self.titleLen)
 
-        self.ip = self.hcbEntrypoint
-        self.byteCode.seek(self.ip, seekPosition.SEEK_SET)
+        self.ip = 0    # instruction ptr
+        self.sp = 0    # stack position / ptr
+        self.frameNum = 0   # stack frame?
+        self.status = 0
+        self.qScanState = 0
+        self.stack = [vmStackEntry(vmVarType.T_UNDEF,-1) for i in range(16+1)]
+        self.stackFrame = [vmStackFrame(-1,-1) for i in range(3+1)]
+        self.globalVar = dict()
+
+        self.moveIP(self.hcbEntrypoint)
     def readInstruction(self):
         opcode = self.byteCode.readU8()
         print("Opcode: 0x{:x} {}".format(opcode,vmOPCode(opcode).name))
+        self.ip += 1
         return vmOPCode(opcode)
+    def moveIP(self,pos:int):
+        self.ip = pos
+        self.byteCode.seek(self.ip, seekPosition.SEEK_SET)
+        print("move IP to {}".format(self.ip))
+    def pushStack(self,frame:vmStackEntry):
+        print("push {}/{} to stack".format(frame.type.name,frame.data))
+        self.stack[self.sp] = frame
+        self.sp += 1
+        print("Push Stack:\tSP:{}->{}\tStack #{}:{}".format(self.sp - 1,self.sp,self.sp,self.stack[self.sp].data))
+        pass
+    def popStack(self) -> vmStackEntry:
+        entry = self.stack[self.sp - 1]
+        assert(entry.type != vmVarType.T_UNDEF)
+        self.sp -= 1
+        self.stack[self.sp] = vmStackEntry(vmVarType.T_UNDEF,-1)
+        print("Pop Stack:\tSP:{}->{}\tStack #{}:{}".format(self.sp,self.sp + 1,self.sp,self.stack[self.sp].data))
+        return entry
+        pass
+    def printRegisterAndStack(self):
+        # reg
+        print("IP:{}\tSP:{}".format(self.ip,self.sp))
+        # stack
+        print("Stack entry:")
+        for i in range(16+1):
+            print(r"Stack #{}: {} {}".format(16 -i,self.stack[i].type.name,self.stack[i].data))
+        # global entries
+        print("Global variables:")
+        for i in self.globalVar.keys():
+            print("{} - {}".format(i,self.globalVar[i]))
+        pass
     def runVM(self):
-        while(True):
-            op = self.readInstruction()
-            if(op == vmOPCode.OP_NOP):
-                pass
-            elif(op == vmOPCode.OP_INITSTACK):
-                arg1 = self.byteCode.readU8()
-                arg2 = self.byteCode.readU8()
-                pass
-            elif(op == vmOPCode.OP_CALL):
-                arg1 = self.byteCode.readU32()
-                pass
-            elif(op == vmOPCode.OP_SYSCALL):
-                arg1 = self.byteCode.readI16()
-                pass
-            elif(op == vmOPCode.OP_RET):
-                pass
-            elif(op == vmOPCode.OP_RET2):
-                pass
-            elif(op == vmOPCode.OP_JMP):
-                arg1 = self.byteCode.readX32()
-                pass
-            elif(op == vmOPCode.OP_JMPCOND):
-                arg1 = self.byteCode.readX32()
-                pass
-            elif(op == vmOPCode.OP_PUSHTRUE):
-                pass
-            elif(op == vmOPCode.OP_PUSHFALSE):
-                pass
-            elif(op == vmOPCode.OP_PUSHINT32):
-                arg1 = self.byteCode.readI32()
-                pass
-            elif(op == vmOPCode.OP_PUSHINT16):
-                arg1 = self.byteCode.readI16()
-                pass
-            elif(op == vmOPCode.OP_PUSHINT8):
-                arg1 = self.byteCode.readI8()
-                pass
-            elif(op == vmOPCode.OP_PUSHFLOAT32):
-                arg1 = self.byteCode.readX32()
-                pass
-            elif(op == vmOPCode.OP_PUSHSTRING):
-                # wip
-                pass
-            elif(op == vmOPCode.OP_PUSHGLOBAL):
-                arg1 = self.byteCode.readI16()
-                pass
-            elif(op == vmOPCode.OP_PUSHSTACK):
-                arg1 = self.byteCode.readI8()
-                pass
-            elif(op == vmOPCode.OP_UNK11):
-                arg1 = self.byteCode.readI16()
-                pass
-            elif(op == vmOPCode.OP_UNK12):
-                arg1 = self.byteCode.readI8()
-                pass
-            elif(op == vmOPCode.OP_PUSHTOP):
-                pass
-            elif(op == vmOPCode.OP_PUSHTEMP):
-                pass
-            elif(op == vmOPCode.OP_POPGLOBAL):
-                arg1 = self.byteCode.readI16()
-                pass
-            elif(op == vmOPCode.OP_COPYSTACK):
-                arg1 = self.byteCode.readI8()
-                pass
-            elif(op == vmOPCode.OP_UNK17):
-                arg1 = self.byteCode.readI16()
-                pass
-            elif(op == vmOPCode.OP_UNK18):
-                arg1 = self.byteCode.readI8()
-                pass
-            elif(op == vmOPCode.OP_NEG):
-                pass
-            elif(op == vmOPCode.OP_ADD):
-                pass
-            elif(op == vmOPCode.OP_SUB):
-                pass
-            elif(op == vmOPCode.OP_MUL):
-                pass
-            elif(op == vmOPCode.OP_DIV):
-                pass
-            elif(op == vmOPCode.OP_MOD):
-                pass
-            elif(op == vmOPCode.OP_TEST):
-                pass
-            elif(op == vmOPCode.OP_LEGEND):
-                pass
-            elif(op == vmOPCode.OP_LOGOR):
-                pass
-            elif(op == vmOPCode.OP_EQ):
-                pass
-            elif(op == vmOPCode.OP_NEQ):
-                pass
-            elif(op == vmOPCode.OP_QT):
-                pass
-            elif(op == vmOPCode.OP_LE):
-                pass
-            elif(op == vmOPCode.OP_LT):
-                pass
-            elif(op == vmOPCode.OP_GE):
-                pass
+        try:
+            while(True):
+                op = self.readInstruction()
+                if(op == vmOPCode.OP_NOP):
+                    pass
+                elif(op == vmOPCode.OP_INITSTACK):
+                    arg1 = self.byteCode.readU8()
+                    arg2 = self.byteCode.readU8()
+                    print("Operands: {} {}".format(arg1,arg2))
+                    self.ip += 2
+                    s1 = vmStackEntry(vmVarType.T_INT,arg1)
+                    s2 = vmStackEntry(vmVarType.T_INT,arg2)
+                    self.pushStack(s1)
+                    self.pushStack(s2)
+                    pass
+                elif(op == vmOPCode.OP_CALL):
+                    arg1 = self.byteCode.readU32()
+                    print("Operands: {}".format(arg1))
+                    self.ip += 4
+                    s1 = vmStackEntry(vmVarType.T_INT,self.ip)
+                    self.pushStack(s1)
+                    self.moveIP(arg1)
+                    pass
+                elif(op == vmOPCode.OP_SYSCALL):
+                    arg1 = self.byteCode.readI16()
+                    print("Operands: {}".format(arg1))
+                    self.ip += 2
+                    self.byteCode.seek(2,seekPosition.SEEK_CUR)
+                    pass
+                elif(op == vmOPCode.OP_RET):
+                    s1 = self.popStack()
+                    assert(s1.type == vmVarType.T_INT)
+                    self.moveIP(s1.data)
+                    pass
+                elif(op == vmOPCode.OP_RET2):
+                    pass
+                elif(op == vmOPCode.OP_JMP):
+                    arg1 = self.byteCode.readX32()
+                    print("Operands: {}".format(arg1))
+                    self.ip += 4
+                    pass
+                elif(op == vmOPCode.OP_JMPCOND):
+                    arg1 = self.byteCode.readX32()
+                    s1 = self.popStack().data
+                    s2 = self.popStack().data
+                    # s0 / s1 : 0 / False
+                    if(s1 == True):
+                        s1 = 1
+                    if(s1 == False):
+                        s1 = 0
+                    if(s2 == True):
+                        s1 = 1
+                    if(s2 == False):
+                        s1 = 0
+                    print("Operands: {}".format(arg1))
+                    self.ip += 4
+                    if(s1 == s2):
+                        self.moveIP(arg1)
+                    pass
+                elif(op == vmOPCode.OP_PUSHTRUE):
+                    s1 = vmStackEntry(vmVarType.T_TRUE,True)
+                    self.pushStack(s1)
+                    pass
+                elif(op == vmOPCode.OP_PUSHFALSE):
+                    s1 = vmStackEntry(vmVarType.T_FALSE,False)
+                    self.pushStack(s1)
+                    pass
+                elif(op == vmOPCode.OP_PUSHINT32):
+                    arg1 = self.byteCode.readI32()
+                    print("Operands: {}".format(arg1))
+                    self.ip += 4
+                    s1 = vmStackEntry(vmVarType.T_INT, arg1)
+                    self.pushStack(s1)
+                    pass
+                elif(op == vmOPCode.OP_PUSHINT16):
+                    arg1 = self.byteCode.readI16()
+                    print("Operands: {}".format(arg1))
+                    self.ip += 2
+                    s1 = vmStackEntry(vmVarType.T_INT, arg1)
+                    self.pushStack(s1)
+                    pass
+                elif(op == vmOPCode.OP_PUSHINT8):
+                    arg1 = self.byteCode.readI8()
+                    print("Operands: {}".format(arg1))
+                    self.ip += 1
+                    s1 = vmStackEntry(vmVarType.T_INT, arg1)
+                    self.pushStack(s1)
+                    pass
+                elif(op == vmOPCode.OP_PUSHFLOAT32):
+                    arg1 = self.byteCode.readX32()
+                    print("Operands: {}".format(arg1))
+                    self.ip += 4
+                    s1 = vmStackEntry(vmVarType.T_INT, arg1)
+                    self.pushStack(s1)
+                    pass
+                elif(op == vmOPCode.OP_PUSHSTRING):
+                    length = self.byteCode.readU8()
+                    string = self.byteCode.readString(length)
+                    print(length,string)
+                    # wip
+                    pass
+                elif(op == vmOPCode.OP_PUSHGLOBAL):
+                    arg1 = self.byteCode.readI16()
+                    print("Operands: {}".format(arg1))
+                    self.ip += 2
+                    """
+                    pass
+                    se = self.popStack()
+                    self.globalVar[arg1] = se.data
+                    """
+                    pass
+                elif(op == vmOPCode.OP_PUSHSTACK):
+                    arg1 = self.byteCode.readI8()
+                    print("Operands: {}".format(arg1))
+                    self.ip += 1
+                    pass
+                elif(op == vmOPCode.OP_UNK11):
+                    arg1 = self.byteCode.readI16()
+                    print("Operands: {}".format(arg1))
+                    self.ip += 2
+                    pass
+                elif(op == vmOPCode.OP_UNK12):
+                    arg1 = self.byteCode.readI8()
+                    print("Operands: {}".format(arg1))
+                    self.ip += 1
+                    pass
+                elif(op == vmOPCode.OP_PUSHTOP):
+                    pass
+                elif(op == vmOPCode.OP_PUSHTEMP):
+                    pass
+                elif(op == vmOPCode.OP_POPGLOBAL):
+                    arg1 = self.byteCode.readI16()
+                    print("Operands: {}".format(arg1))
+                    self.ip += 2
+                    """
+                    gValue = self.globalVar[arg1]
+                    assert(gValue == True)
+                    se = vmStackEntry(vmVarType.T_TRUE,gValue)
+                    self.pushStack(se)
+                    """
+                    pass
+                elif(op == vmOPCode.OP_COPYSTACK):
+                    arg1 = self.byteCode.readI8()
+                    print("Operands: {}".format(arg1))
+                    self.ip += 1
+                    pass
+                elif(op == vmOPCode.OP_UNK17):
+                    arg1 = self.byteCode.readI16()
+                    print("Operands: {}".format(arg1))
+                    self.ip += 2
+                    pass
+                elif(op == vmOPCode.OP_UNK18):
+                    arg1 = self.byteCode.readI8()
+                    print("Operands: {}".format(arg1))
+                    self.ip += 1
+                    pass
+                elif(op == vmOPCode.OP_NEG):
+                    pass
+                elif(op == vmOPCode.OP_ADD):
+                    pass
+                elif(op == vmOPCode.OP_SUB):
+                    pass
+                elif(op == vmOPCode.OP_MUL):
+                    pass
+                elif(op == vmOPCode.OP_DIV):
+                    pass
+                elif(op == vmOPCode.OP_MOD):
+                    pass
+                elif(op == vmOPCode.OP_TEST):
+                    pass
+                elif(op == vmOPCode.OP_LEGEND):
+                    pass
+                elif(op == vmOPCode.OP_LOGOR):
+                    pass
+                elif(op == vmOPCode.OP_EQ):
+                    pass
+                elif(op == vmOPCode.OP_NEQ):
+                    pass
+                elif(op == vmOPCode.OP_QT):
+                    pass
+                elif(op == vmOPCode.OP_LE):
+                    pass
+                elif(op == vmOPCode.OP_LT):
+                    pass
+                elif(op == vmOPCode.OP_GE):
+                    pass
+                s = input()
+                if(len(s) >= 1 and s[0]=="p"):
+                    self.printRegisterAndStack()
+        except Exception:
+            print("Occurred a Python exception.")
+            self.printRegisterAndStack()
+            raise Exception
+            # exit()
         pass
 
 
