@@ -173,6 +173,8 @@ class vmStackFrame():
 class vm():
     def __init__(self,filename):
         self.vm_debug = False
+        self.stack_debug = False
+        self.stack_size = 32
         self.byteCode = hcbReader(filename)
         self.headerOffset = self.byteCode.readU32()
         self.byteCode.seek(self.headerOffset, seekPosition.SEEK_SET)
@@ -188,32 +190,42 @@ class vm():
         self.frameNum = 0   # stack frame?
         self.status = 0
         self.qScanState = 0
-        self.stack = [vmStackEntry(vmVarType.T_UNDEF,-1) for i in range(16+1)]
+        self.stack = [vmStackEntry(vmVarType.T_UNDEF,-1) for i in range(self.stack_size+1)]
         self.stackFrame = [vmStackFrame(-1,-1) for i in range(3+1)]
         self.globalVar = dict()
 
         self.moveIP(self.hcbEntrypoint)
     def readInstruction(self):
-        opcode = self.byteCode.readU8()
-        print("Opcode: 0x{:x} {}".format(opcode,vmOPCode(opcode).name))
-        self.ip += 1
-        return vmOPCode(opcode)
+        try:
+            opcode = self.byteCode.readU8()
+            print("Opcode: 0x{:x} {}".format(opcode,vmOPCode(opcode).name),end="\t")
+            self.ip += 1
+            return vmOPCode(opcode)
+        except ValueError:
+            raise self.illegalInstructionException()
     def moveIP(self,pos:int):
         self.ip = pos
         self.byteCode.seek(self.ip, seekPosition.SEEK_SET)
         print("move IP to {}".format(self.ip))
     def pushStack(self,frame:vmStackEntry):
-        print("push {}/{} to stack".format(frame.type.name,frame.data))
+        if self.stack_debug:
+            print("push {}/{} to stack".format(frame.type.name,frame.data))
         self.stack[self.sp] = frame
         self.sp += 1
-        print("Push Stack:\tSP:{}->{}\tStack #{}:{}".format(self.sp - 1,self.sp,self.sp,self.stack[self.sp].data))
+        if self.stack_debug:
+            print("Push Stack:\tSP:{}->{}\tStack #{}:{}".format(self.sp - 1,self.sp,self.sp,self.stack[self.sp].data))
+        if(self.sp > 16):
+            print("Warning: SP > 16!")
         pass
     def popStack(self) -> vmStackEntry:
         entry = self.stack[self.sp - 1]
         assert(entry.type != vmVarType.T_UNDEF)
         self.sp -= 1
         self.stack[self.sp] = vmStackEntry(vmVarType.T_UNDEF,-1)
-        print("Pop Stack:\tSP:{}->{}\tStack #{}:{}".format(self.sp,self.sp + 1,self.sp,self.stack[self.sp].data))
+        if self.stack_debug:
+            print("Pop Stack:\tSP:{}->{}\tStack #{}:{}".format(self.sp,self.sp + 1,self.sp,self.stack[self.sp].data))
+        if(self.sp > 16):
+            print("Warning: SP > 16!")
         return entry
         pass
     def printRegisterAndStack(self):
@@ -221,12 +233,14 @@ class vm():
         print("IP:{}\tSP:{}".format(self.ip,self.sp))
         # stack
         print("Stack entry:")
-        for i in range(16+1):
-            print(r"Stack #{}: {} {}".format(16 -i,self.stack[i].type.name,self.stack[i].data))
+        for i in range(self.stack_size+1):
+            print(r"Stack #{}: {} {}".format(self.stack_size -i,self.stack[i].type.name,self.stack[i].data))
         # global entries
         print("Global variables:")
         for i in self.globalVar.keys():
             print("{} - {}".format(i,self.globalVar[i]))
+        pass
+    def illegalInstructionException(BaseException):
         pass
     def runVM(self):
         try:
@@ -259,11 +273,13 @@ class vm():
                     self.byteCode.seek(2,seekPosition.SEEK_CUR)
                     pass
                 elif(op == vmOPCode.OP_RET):
+                    print()
                     s1 = self.popStack()
                     assert(s1.type == vmVarType.T_INT)
                     self.moveIP(s1.data)
                     pass
                 elif(op == vmOPCode.OP_RET2):
+                    print()
                     pass
                 elif(op == vmOPCode.OP_JMP):
                     arg1 = self.byteCode.readX32()
@@ -289,14 +305,17 @@ class vm():
                         self.moveIP(arg1)
                     pass
                 elif(op == vmOPCode.OP_PUSHTRUE):
+                    print()
                     s1 = vmStackEntry(vmVarType.T_TRUE,True)
                     self.pushStack(s1)
                     pass
                 elif(op == vmOPCode.OP_PUSHFALSE):
+                    print()
                     s1 = vmStackEntry(vmVarType.T_FALSE,False)
                     self.pushStack(s1)
                     pass
                 elif(op == vmOPCode.OP_PUSHINT32):
+                    print()
                     arg1 = self.byteCode.readI32()
                     print("Operands: {}".format(arg1))
                     self.ip += 4
@@ -325,6 +344,7 @@ class vm():
                     self.pushStack(s1)
                     pass
                 elif(op == vmOPCode.OP_PUSHSTRING):
+                    print()
                     length = self.byteCode.readU8()
                     string = self.byteCode.readString(length)
                     print(length,string)
@@ -356,8 +376,10 @@ class vm():
                     self.ip += 1
                     pass
                 elif(op == vmOPCode.OP_PUSHTOP):
+                    print()
                     pass
                 elif(op == vmOPCode.OP_PUSHTEMP):
+                    print()
                     pass
                 elif(op == vmOPCode.OP_POPGLOBAL):
                     arg1 = self.byteCode.readI16()
@@ -386,37 +408,70 @@ class vm():
                     self.ip += 1
                     pass
                 elif(op == vmOPCode.OP_NEG):
+                    print()
                     pass
                 elif(op == vmOPCode.OP_ADD):
+                    arg1 = self.popStack().data
+                    arg2 = self.popStack().data
+                    assert(type(arg1) == type(int()))
+                    assert(type(arg2) == type(int()))
+                    ret = arg1 + arg2
+                    self.pushStack(vmStackEntry(vmVarType.T_INT,ret))
+                    print()
                     pass
                 elif(op == vmOPCode.OP_SUB):
+                    arg1 = self.popStack().data
+                    arg2 = self.popStack().data
+                    assert(type(arg1) == type(int()))
+                    assert(type(arg2) == type(int()))
+                    ret = arg1 - arg2
+                    self.pushStack(vmStackEntry(vmVarType.T_INT,ret))
+                    print()
                     pass
                 elif(op == vmOPCode.OP_MUL):
+                    arg1 = self.popStack().data
+                    arg2 = self.popStack().data
+                    assert(type(arg1) == type(int()))
+                    assert(type(arg2) == type(int()))
+                    ret = arg1 * arg2
+                    self.pushStack(vmStackEntry(vmVarType.T_INT,ret))
+                    print()
                     pass
                 elif(op == vmOPCode.OP_DIV):
+                    print()
                     pass
                 elif(op == vmOPCode.OP_MOD):
+                    print()
                     pass
                 elif(op == vmOPCode.OP_TEST):
+                    print()
                     pass
                 elif(op == vmOPCode.OP_LEGEND):
+                    print()
                     pass
                 elif(op == vmOPCode.OP_LOGOR):
+                    print()
                     pass
                 elif(op == vmOPCode.OP_EQ):
+                    print()
                     pass
                 elif(op == vmOPCode.OP_NEQ):
+                    print()
                     pass
                 elif(op == vmOPCode.OP_QT):
+                    print()
                     pass
                 elif(op == vmOPCode.OP_LE):
+                    print()
                     pass
                 elif(op == vmOPCode.OP_LT):
+                    print()
                     pass
                 elif(op == vmOPCode.OP_GE):
+                    print()
                     pass
                 s = input()
-                if(len(s) >= 1 and s[0]=="p"):
+                if(len(s) >= 1 and s[0]=="p"):  # print
                     self.printRegisterAndStack()
         except Exception:
             print("Occurred a Python exception.")
