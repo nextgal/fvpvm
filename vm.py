@@ -184,6 +184,16 @@ class vm():
         self.resMode = self.byteCode.readI16()
         self.titleLen = self.byteCode.readU8()
         self.gameTitle = self.byteCode.readString(self.titleLen)
+        self.importTable = list()
+
+        # import table
+        self.importTablesize = self.byteCode.readU16()
+        for i in range(self.importTablesize):
+            itype = self.byteCode.readU8()
+            iSymLen = self.byteCode.readU8()
+            iName = self.byteCode.readString(iSymLen)
+            self.importTable.append(iName)
+            pass
 
         self.ip = 0    # instruction ptr
         self.sp = 0    # stack position / ptr
@@ -235,11 +245,17 @@ class vm():
         print("Stack entry:")
         for i in range(self.stack_size+1):
             print(r"Stack #{}: {} {}".format(self.stack_size -i,self.stack[i].type.name,self.stack[i].data))
+        pass
+    def printGlobalVar(self):
         # global entries
         print("Global variables:")
         for i in self.globalVar.keys():
             print("{} - {}".format(i,self.globalVar[i]))
-        pass
+    def printImportTable(self):
+        print("Import table:")
+        for i in range(self.importTablesize):
+            print("#{} : {}".format(i,self.importTable[i]))
+            pass
     def illegalInstructionException(BaseException):
         pass
     def runVM(self):
@@ -268,7 +284,7 @@ class vm():
                     pass
                 elif(op == vmOPCode.OP_SYSCALL):
                     arg1 = self.byteCode.readI16()
-                    print("Operands: {}".format(arg1))
+                    print("Operands: {} / {}".format(arg1,self.importTable[arg1]))
                     self.ip += 2
                     self.byteCode.seek(2,seekPosition.SEEK_CUR)
                     pass
@@ -470,19 +486,26 @@ class vm():
                 elif(op == vmOPCode.OP_GE):
                     print()
                     pass
-                s = input()
+                s = input(">")
+                # debugger
                 if(len(s) >= 1 and s[0]=="p"):  # print
                     self.printRegisterAndStack()
+                elif(len(s) >= 1 and s[0]=="g"):
+                    self.printGlobalVar()
+                elif(len(s) >= 1 and s[0]=="i"):
+                    self.printImportTable()
+                    pass
         except Exception:
             print("Occurred a Python exception.")
             self.printRegisterAndStack()
+            self.printGlobalVar()
+            self.printImportTable()
             raise Exception
-            # exit()
         pass
-
 
 fvm = vm(sys.argv[1])
 
-print("HCB for FVP Game title: {}".format(fvm.gameTitle))
+print("pFVPvm - A Python FVP VM and debuggger")
+print("Game title: {}".format(fvm.gameTitle))
 
 fvm.runVM()
