@@ -6,6 +6,7 @@ import sys
 import os
 from enum import Enum,unique
 from array import array
+from prompt_toolkit import prompt
 
 class seekPosition(Enum):
     SEEK_SET = 0
@@ -115,10 +116,10 @@ class vmOPCode(Enum):
     OP_INITSTACK = 0x1
     OP_CALL = 0x02
     OP_SYSCALL = 0x03
-    OP_RET = 0x04
-    OP_RET2 = 0x05
+    OP_RET = 0x04   # return with void
+    OP_RET2 = 0x05  # return with value
     OP_JMP = 0x06
-    OP_JMPCOND = 0x07
+    OP_JMPCOND = 0x07   # jump if stack base == 0
     OP_PUSHTRUE = 0x08
     OP_PUSHFALSE = 0x09
     OP_PUSHINT32 = 0x0a
@@ -174,7 +175,7 @@ class vm():
     def __init__(self,filename):
         self.vm_debug = False
         self.stack_debug = False
-        self.stack_size = 16
+        self.stack_size = 0x100
         self.byteCode = hcbReader(filename)
         self.headerOffset = self.byteCode.readU32()
         self.byteCode.seek(self.headerOffset, seekPosition.SEEK_SET)
@@ -194,6 +195,9 @@ class vm():
             iName = self.byteCode.readString(iSymLen)
             self.importTable.append([iName,itype])
             pass
+        # print ifo
+
+        print("Header : 0x{:x} Entrypoint: 0x{:x}".format(self.headerOffset,self.hcbEntrypoint))
 
         # registers
         self.ip = 0    # instruction ptr
@@ -262,18 +266,20 @@ class vm():
         self.printStack()
 
     def printRegister(self):
-        print("IP:{}\tSP:{}".format(self.ip,self.sp))
+        print("IP:0x{:x}\tSP:0x{:x}".format(self.ip,self.sp))
         pass
     def printStack(self):
         for i in range(self.stack_size+1):
             se = self.stack[i]
+            if(se.type == vmVarType.T_UNDEF):
+                break
             print(r"Stack #{}: {} {}".format(self.stack_size -i,se.type.name,se.data))
         pass
     def printGlobalVar(self):
         # global entries
         print("Global variables:")
         for i in self.globalVar.keys():
-            print("{} - {}".format(i,self.globalVar[i]))
+            print("0x{:x} - {}".format(i,i,self.globalVar[i]))
     def printImportTable(self):
         print("Import table:")
         for i in range(self.importTablesize):
@@ -326,8 +332,7 @@ class vm():
                     """
                     INITSTACK <OP1> <OP2>
                     INITSTACK <NUM> <LOCAL>
-
-                        - NUM 
+                        - NUM count of arguments passed to this function (?)
                         - LOCAL count of local variables (stack variable)
                     """
                     # WIP
@@ -335,21 +340,32 @@ class vm():
                     arg2 = self.byteCode.readU8()   # unk
                     print("Operands: {} {}".format(arg1,arg2))
                     self.ip += 2
-                    offset = arg1 << 8
-                    arg1Val = struct.unpack(">B",self.byteCode.file[offset:offset+1])[0]
-                    s1 = vmStackEntry(vmVarType.T_INT,arg1Val)
-                    s2 = vmStackEntry(vmVarType.T_INT,0)
+                    # do stuffs here
+                    s1_var = arg1 << 8 + arg2
+                    s1 = vmStackEntry(vmVarType.T_INT, s1_var)
+                    s2 = vmStackEntry(vmVarType.T_INT, 0)
                     self.pushStack(s1)
                     for i in range(arg1):
                         self.pushStack(s2)
+                        pass
                     pass
                 elif(op == vmOPCode.OP_CALL):
+                    """
+                    CALL <IMM>
+                        - IMM offset of called subroutine
+
+                    micro-OPs:
+                        - push stack base
+                        - push eip
+                        - jump to imm
+                    """
                     arg1 = self.byteCode.readU32()
                     print("Operands: {}".format(arg1))
                     self.ip += 4
                     s1 = vmStackEntry(vmVarType.T_INT,self.sp)
                     s2 = vmStackEntry(vmVarType.T_INT,self.ip)
-                    self.pushStack(s2)
+                    self.pushStack(s1)  # push sp
+                    self.pushStack(s2)  # push ip
                     self.moveIP(arg1)
                     pass
                 elif(op == vmOPCode.OP_SYSCALL):
@@ -363,6 +379,8 @@ class vm():
                     assert(self.stack[self.sp].type == vmVarType.T_RET)
                     s1 = self.popStack()
                     self.moveIP(s1.data)
+                    s2 = self.popStack()
+                    self.sp = s2.data
                     pass
                 elif(op == vmOPCode.OP_RET2):
                     print()
@@ -593,6 +611,8 @@ class vm():
                     print()
                     raise NotImplementedError
                     pass
+                # print reg. for debug
+                self.printRegister()
         except Exception:
             print("Occurred a Python exception.")
             self.printRegisterAndStack()
