@@ -6,7 +6,7 @@ import sys
 import os
 from enum import Enum,unique
 from array import array
-from prompt_toolkit import prompt
+import prompt_toolkit
 
 class seekPosition(Enum):
     SEEK_SET = 0
@@ -206,10 +206,14 @@ class vm():
 
         self.frameNum = 0   # stack frame?
         self.status = 0
-        self.qScanState = 0
+        # self.qScanState = 0
+        self.tempStackEntry = vmStackEntry(vmVarType.T_UNDEF, 1919810)
         self.stack = [vmStackEntry(vmVarType.T_UNDEF,-1) for i in range(self.stack_size+1)]
         self.stackFrame = [vmStackFrame(-1,-1) for i in range(3+1)]
         self.globalVar = dict()
+
+        # for debugging
+        self.breakpoints = list()
 
         self.moveIP(self.hcbEntrypoint)
     def readInstruction(self):
@@ -241,7 +245,7 @@ class vm():
             exit()
     def popStack(self) -> vmStackEntry:
         entry = self.stack[self.sp - 1]
-        assert(entry.type != vmVarType.T_UNDEF)
+        # assert(entry.type != vmVarType.T_UNDEF)
         self.sp -= 1
         self.stack[self.sp] = vmStackEntry(vmVarType.T_UNDEF,-1)
         if self.stack_debug:
@@ -282,9 +286,14 @@ class vm():
             print("0x{:x} - {}".format(i,i,self.globalVar[i]))
     def printImportTable(self):
         print("Import table:")
-        for i in range(self.importTablesize):
-            print("#0x{:x} : {}({})".format(i,self.importTable[i][0],self.importTable[i][1]))
-            pass
+        try:
+            for i in range(self.importTablesize):
+                print("#0x{:x} : {}({})".format(i,self.importTable[i][0],self.importTable[i][1]))
+                if(i%20 == 0):
+                    input("Press any key to continue..")
+        except KeyboardInterrupt:
+            print()
+            return
     def disASM(self,offset:int):
         pass
     def illegalInstructionException(BaseException):
@@ -297,17 +306,21 @@ class vm():
             params.append(self.popStack())
         print("Emulate Syscall {}(No.{})...".format(self.importTable[sysCallNO][0],sysCallNO))
         pass
+    def addBreakpoint(self,addr:int):
+        pass
+    def removeBreakpoint(self,addr:int):
+        pass
     def runVM(self):
         try:
             while(True):
                 while(True):
-                    s = input(">")
+                    s = prompt_toolkit.prompt("[FVPvm]>",history=prompt_toolkit.history.InMemoryHistory())
                     # debugger
-                    if(len(s) >= 1 and s[0]=="p"):  # print
+                    if(s.startswith("p")):  # print
                         self.printRegisterAndStack()
-                    elif(len(s) >= 1 and s[0]=="s"):  # print
+                    elif(s.startswith("s")):  # print
                         self.printStack()
-                    elif(len(s) >= 1 and s[0]=="r"):  # print
+                    elif(s.startswith("r")):  # print
                         self.printRegister()
                     elif(len(s) >= 1 and s[0]=="g"):
                         self.printGlobalVar()
@@ -384,7 +397,12 @@ class vm():
                     pass
                 elif(op == vmOPCode.OP_RET2):
                     print()
-                    raise NotImplementedError
+                    self.tempStackEntry = self.popStack()
+                    # just normal as RET
+                    s1 = self.popStack()
+                    self.moveIP(s1.data)
+                    s2 = self.popStack()
+                    self.sp = s2.data
                     pass
                 elif(op == vmOPCode.OP_JMP):
                     # done
@@ -500,8 +518,11 @@ class vm():
                     print()
                     pass
                 elif(op == vmOPCode.OP_PUSHTEMP):
-                    raise NotImplementedError
+                    # raise NotImplementedError
                     print()
+                    s1 = self.tempStackEntry
+                    self.tempStackEntry = vmStackEntry(vmVarType.T_UNDEF, 1919810)
+                    self.pushStack(s1)
                     pass
                 elif(op == vmOPCode.OP_POPGLOBAL):
                     arg1 = self.byteCode.readI16()  # key
@@ -600,12 +621,32 @@ class vm():
                     raise NotImplementedError
                     pass
                 elif(op == vmOPCode.OP_LE):
+                    """
+                    LESS OR EQUAL
+                    """
                     print()
-                    raise NotImplementedError
+                    arg1 = self.popStack().data
+                    arg2 = self.popStack().data
+                    ret = arg1 <= arg2
+                    if(ret == True):
+                        self.pushStack(vmStackEntry(vmVarType.T_TRUE,ret))
+                    else:
+                        self.pushStack(vmStackEntry(vmVarType.T_FALSE,ret))
+                    # raise NotImplementedError
                     pass
                 elif(op == vmOPCode.OP_LT):
+                    """
+                    LARGE THAN
+                    """
                     print()
-                    raise NotImplementedError
+                    arg1 = self.popStack().data
+                    arg2 = self.popStack().data
+                    ret = arg1 < arg2
+                    if(ret == True):
+                        self.pushStack(vmStackEntry(vmVarType.T_TRUE,ret))
+                    else:
+                        self.pushStack(vmStackEntry(vmVarType.T_FALSE,ret))
+                    #raise NotImplementedError
                     pass
                 elif(op == vmOPCode.OP_GE):
                     print()

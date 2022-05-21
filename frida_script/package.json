@@ -1,0 +1,12 @@
+{
+    "name": "pfvpvm-frida-example",
+    "version": "1.0.0",
+    "description": "Hello,frida!",
+    "private": true,
+    "main": "index.ts",
+    "devDependencies": {
+      "@types/frida-gum": "*",
+      "@types/node": "*",
+      "frida-compile": "*"
+    }
+  }
