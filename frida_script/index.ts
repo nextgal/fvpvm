@@ -7,7 +7,7 @@ const enum vmOPCode {
     OP_RET,
     OP_RET2,
     OP_JMP,
-    OP_JZ,
+    OP_JMPCOND,
     OP_PUSHTRUE,
     OP_PUSHFALSE,
     OP_PUSTI32,
@@ -58,7 +58,7 @@ var OpCodeFuncAddr = [
     new NativePointer(0x4448E0),    // 4 / RET
     new NativePointer(0x444900),    // 5 / RET2
     new NativePointer(0x445A10),    // 6 / JMP
-    new NativePointer(0x445A30),    // 7 / JZ
+    new NativePointer(0x445A30),    // 7 / JMPCOND
     new NativePointer(0x444940),    // 8 / PUSHTRUE
     new NativePointer(0x444960),    // 9 / PUSHFALSE
     new NativePointer(0x445A70),    // A / PUSHI32
@@ -213,13 +213,13 @@ function HookFVPOpCode() {
         }
     })
 
-    Interceptor.attach(OpCodeFuncAddr[vmOPCode.OP_JZ], {
+    Interceptor.attach(OpCodeFuncAddr[vmOPCode.OP_JMPCOND], {
         onEnter: function (args) {
             printSOF();
-            console.log("OP_JZ")
+            console.log("OP_JMPCOND")
             PrintFVPRegisters()
             PrintFVPStack()
-            console.warn("JZ!"); console.log("--");
+            console.warn("JMPCOND!"); console.log("--");
         }, onLeave: function (args) {
             PrintFVPRegisters()
             PrintFVPStack()
@@ -673,22 +673,20 @@ function PrintFVPRegisters() {
 }
 
 function PrintFVPStack() {
-    let esp = new NativePointer(lpFVPVM.add(0x820)).readU32()   // stack depth
+    let stackDepth: number = new NativePointer(lpFVPVM.add(0x820)).readU32()   // stack depth
+    let lpStack = lpFVPVM.add(0x8) // stack itself
 
-    let lpStackButtom = lpFVPVM.add(0x8)    // little
-    let lpStackTop = lpStackButtom.add(esp * 8)  // big
+    // console.log(`sptr: 0x${lpStackButtom.toString(16)} 0x${lpStackTop.toString(16)}`)     // l / b
 
-    console.log(`sptr: 0x${lpStackButtom.toString(16)} 0x${lpStackTop.toString(16)}`)     // l / b
-
-    let se = lpStackButtom.readByteArray(esp * 8 + 8)
-    if (se) {
-        console.log(hexdump(se, { header: true }))
+    let stackEntrySize: number = 8;
+    let stack = lpStack.readByteArray(stackDepth * stackEntrySize)
+    if (stack) {
+        console.log(hexdump(stack, { header: true }))
     }
 
-    let ptr = lpStackButtom
-    while (ptr <= lpStackTop) {
-        let ptr2 = ptr
-
+    let i:number = stackDepth
+    while (i>0) {
+        let ptr2 = lpStack.add(8*i)
         // read it!
         /**
             struct FVPStackEntry
@@ -709,12 +707,12 @@ function PrintFVPStack() {
 
         // pretty 
         /* 
-            T_TRUE = 1,
-            T_FALSE = 2,
-            T_INT = 3,
-            T_FLOAT = 4,
-            T_STRING = 5,
-            T_RET = 6,
+            T_TRUE = 0
+            T_FALSE = 1
+            T_INT = 2
+            T_FLOAT = 3
+            T_STRING = 4
+            T_RET = 5
         */
 
         let type_str = ""
@@ -749,8 +747,7 @@ function PrintFVPStack() {
         }
         // print
         console.log(`stack entry: type: ${type_str} unk1: ${unk} sbase: ${sbase} value: ${actualVal} / ${value}`)
-        // next one
-        ptr = ptr.add(8)
+        i--
     }
 }
 
