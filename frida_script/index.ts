@@ -742,12 +742,77 @@ function PrintFVPStack() {
                 type_str = "T_RET"
                 break;
             default:
-                type_str = "unk"
+                type_str = "unk 0x" + type_.toString(16)
                 break;
         }
         // print
         console.log(`stack entry: type: ${type_str} unk1: ${unk} sbase: ${sbase} value: ${actualVal} / ${value}`)
         i--
+    }
+
+    {
+        let tmpPtr = lpFVPVM.add(0x810)
+        // read it!
+        /**
+            struct FVPStackEntry
+            {
+            char type;
+            char unk;
+            __int16 stackBase;
+            int value;
+            };
+         */
+        let type_ = tmpPtr.readU8()
+        tmpPtr = tmpPtr.add(1)  // move
+        let unk = tmpPtr.readU8()
+        tmpPtr = tmpPtr.add(1)  // still move
+        let sbase = tmpPtr.readS16()
+        tmpPtr = tmpPtr.add(2)  // keeps moing
+        let value = tmpPtr.readS32()  // ends, and no moving...
+
+        // pretty 
+        /* 
+            T_TRUE = 0
+            T_FALSE = 1
+            T_INT = 2
+            T_FLOAT = 3
+            T_STRING = 4
+            T_RET = 5
+        */
+
+        let type_str = ""
+        let actualVal: number | string | boolean = ""
+        // 推导值
+        switch (type_) {
+            case 0:
+                type_str = "T_TRUE"
+                actualVal = true
+                break;
+            case 1:
+                type_str = "T_FALSE"
+                actualVal = false
+                break;
+            case 2:
+                type_str = "T_INT"
+                actualVal = tmpPtr.readS32().toString(16)
+                break;
+            case 4:
+                type_str = "T_FLOAT"
+                actualVal = tmpPtr.readFloat().toString(16)
+                break;
+            case 5:
+                type_str = "T_STRING"
+                break;
+            case 6:
+                type_str = "T_RET"
+                break;
+            default:
+                type_str = "unk 0x" + type_.toString(16)
+                break;
+        }
+        // print
+        console.log()
+        console.log(`TMP stack entry: type: ${type_str} unk1: ${unk} sbase: ${sbase} value: ${actualVal} / ${value}`)
     }
 }
 

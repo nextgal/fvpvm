@@ -98,6 +98,7 @@ class vmVarType(Enum):
     T_STRING = 4
     T_RET = 5
     T_UNDEF = 6     # FVP 自然可没有这个，这个仅用于构造类
+    T_RETFUNCADDR = 9
 
 @unique
 class vmOPArg(Enum):
@@ -119,7 +120,7 @@ class vmOPCode(Enum):
     OP_RET = 0x04   # return with void
     OP_RET2 = 0x05  # return with value
     OP_JMP = 0x06
-    OP_JZ = 0x07   # jump if stack base == 0
+    OP_JMPCOND = 0x07   # jump if stack base == 0
     OP_PUSHTRUE = 0x08
     OP_PUSHFALSE = 0x09
     OP_PUSHINT32 = 0x0a
@@ -216,9 +217,6 @@ class vm():
         self.breakpoints = list()
 
         self.moveIP(self.hcbEntrypoint)
-
-        # Init stack
-        self.pushStack(vmStackEntry(vmVarType.T_TRUE,True))
     def readInstruction(self):
         try:
             opcode = self.byteCode.readU8()
@@ -310,6 +308,7 @@ class vm():
     def runVM(self):
         try:
             while(True):
+
                 while(True):
                     s = prompt_toolkit.prompt("[FVPvm]>",history=prompt_toolkit.history.InMemoryHistory())
                     # debugger
@@ -357,9 +356,11 @@ class vm():
                         - push $(arg2) stack entries
                             - push(T_TRUE,0,true)
                     """
-                    sp1 = vmStackEntry(vmVarType(arg1),0)
+                    sp1 = vmStackEntry(vmVarType(arg2),0)
+                    if(vmVarType(arg2) == vmVarType.T_TRUE):
+                        sp1 = vmStackEntry(vmVarType(arg2),True)
                     self.pushStack(sp1)
-                    for i in range(0,arg2):
+                    for i in range(0,arg1):
                         sp2 = vmStackEntry(vmVarType.T_TRUE,True)
                         self.pushStack(sp2)
                         pass
@@ -370,7 +371,7 @@ class vm():
                         - IMM offset of called subroutine
 
                     micro-OPs:
-                        - push stack base
+                        - push esp
                         - push eip
                         - jump to imm
                     """
@@ -413,13 +414,14 @@ class vm():
                     self.ip += 4
                     self.moveIP(arg1)
                     pass
-                elif(op == vmOPCode.OP_JZ):
+                elif(op == vmOPCode.OP_JMPCOND):
                     # WIP
                     arg1 = self.byteCode.readX32()
-                    s1 = self.peekStack()
+                    self.popStack()
                     print("Operands: {}".format(arg1))
                     self.ip += 4
-                    if((s1.type == vmVarType.T_FALSE) or (s1.type == vmVarType.T_INT and s1.value == 0)):
+                    s1 = self.peekStack()
+                    if((s1.type == vmVarType.T_TRUE) or (s1.type == vmVarType.T_INT and s1.value == 1)):
                         self.moveIP(arg1)
                     else:
                         print(s1.data)
@@ -654,6 +656,7 @@ class vm():
                     pass
                 # print reg. for debug
                 self.printRegister()
+                # self.printStack()
         except Exception:
             print("Occurred a Python exception.")
             self.printRegisterAndStack()
