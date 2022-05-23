@@ -91,23 +91,23 @@ class hcbReader():
     
 @unique
 class vmVarType(Enum):
-    T_TRUE = 1,
-    T_FALSE = 2,
-    T_INT = 3,
-    T_FLOAT = 4,
-    T_STRING = 5,
-    T_RET = 6,
-    T_UNDEF = 7     # FVP 自然可没有这个，这个仅用于构造类
+    T_TRUE = 0
+    T_FALSE = 1
+    T_INT = 2
+    T_FLOAT = 3
+    T_STRING = 4
+    T_RET = 5
+    T_UNDEF = 6     # FVP 自然可没有这个，这个仅用于构造类
 
 @unique
 class vmOPArg(Enum):
-    ARG_NULL = 0,
-    ARG_X32 = 1,
-    ARG_INT32 = 2,
-    ARG_INT16 = 3,
-    ARG_INT8 = 4,
-    ARG_INT8INT8 = 5,
-    ARG_STRING = 6,
+    ARG_NULL = 0
+    ARG_X32 = 1
+    ARG_INT32 = 2
+    ARG_INT16 = 3
+    ARG_INT8 = 4
+    ARG_INT8INT8 = 5
+    ARG_STRING = 6
     ARG_UNDEF = 7       # 同上
 
 @unique
@@ -119,7 +119,7 @@ class vmOPCode(Enum):
     OP_RET = 0x04   # return with void
     OP_RET2 = 0x05  # return with value
     OP_JMP = 0x06
-    OP_JMPCOND = 0x07   # jump if stack base == 0
+    OP_JZ = 0x07   # jump if stack base == 0
     OP_PUSHTRUE = 0x08
     OP_PUSHFALSE = 0x09
     OP_PUSHINT32 = 0x0a
@@ -216,6 +216,9 @@ class vm():
         self.breakpoints = list()
 
         self.moveIP(self.hcbEntrypoint)
+
+        # Init stack
+        self.pushStack(vmStackEntry(vmVarType.T_TRUE,True))
     def readInstruction(self):
         try:
             opcode = self.byteCode.readU8()
@@ -236,8 +239,6 @@ class vm():
             self.sp += 1
             if self.stack_debug:
                 print("Push Stack:\tSP:{}->{}\tStack #{}:{}".format(self.sp - 1,self.sp,self.sp,self.stack[self.sp].data))
-            if(self.sp > 16):
-                print("Warning: SP > 16!")
             pass
         except IndexError:
             print("Out of stack!")
@@ -250,8 +251,6 @@ class vm():
         self.stack[self.sp] = vmStackEntry(vmVarType.T_UNDEF,-1)
         if self.stack_debug:
             print("Pop Stack:\tSP:{}->{}\tStack #{}:{}".format(self.sp,self.sp + 1,self.sp,self.stack[self.sp].data))
-        if(self.sp > 16):
-            print("Warning: SP > 16!")
         return entry
         pass
     def peekStack(self) -> vmStackEntry:
@@ -261,8 +260,6 @@ class vm():
         # self.stack[self.sp] = vmStackEntry(vmVarType.T_UNDEF,-1)
         if self.stack_debug:
             print("Peek Stack:\tSP:{}\tStack #{}:{}".format(self.sp,self.sp,self.stack[self.sp].data))
-        if(self.sp > 16):
-            print("Warning: SP > 16!")
         return entry
         pass
     def printRegisterAndStack(self):
@@ -349,17 +346,22 @@ class vm():
                         - LOCAL count of local variables (stack variable)
                     """
                     # WIP
-                    arg1 = self.byteCode.readU8()   # num
-                    arg2 = self.byteCode.readU8()   # unk
+                    arg1:int = self.byteCode.readU8()   # num
+                    arg2:int = self.byteCode.readU8()   # unk
                     print("Operands: {} {}".format(arg1,arg2))
                     self.ip += 2
                     # do stuffs here
-                    s1_var = arg1 << 8 + arg2
-                    s1 = vmStackEntry(vmVarType.T_INT, s1_var)
-                    s2 = vmStackEntry(vmVarType.T_INT, 0)
-                    self.pushStack(s1)
-                    for i in range(arg1):
-                        self.pushStack(s2)
+                    """
+                    WHAT should we do: (push(type,unk,value))
+                        - push a stack entry : (arg1,arg2,0)
+                        - push $(arg2) stack entries
+                            - push(T_TRUE,0,true)
+                    """
+                    sp1 = vmStackEntry(vmVarType(arg1),0)
+                    self.pushStack(sp1)
+                    for i in range(0,arg2):
+                        sp2 = vmStackEntry(vmVarType.T_TRUE,True)
+                        self.pushStack(sp2)
                         pass
                     pass
                 elif(op == vmOPCode.OP_CALL):
@@ -411,18 +413,16 @@ class vm():
                     self.ip += 4
                     self.moveIP(arg1)
                     pass
-                elif(op == vmOPCode.OP_JMPCOND):
+                elif(op == vmOPCode.OP_JZ):
                     # WIP
                     arg1 = self.byteCode.readX32()
                     s1 = self.peekStack()
-                    if(s1 == True):
-                        s1 = 1
-                    if(s1 == False):
-                        s1 = 0
                     print("Operands: {}".format(arg1))
                     self.ip += 4
-                    if(s1 == 0):
+                    if((s1.type == vmVarType.T_FALSE) or (s1.type == vmVarType.T_INT and s1.value == 0)):
                         self.moveIP(arg1)
+                    else:
+                        print(s1.data)
                     pass
                 elif(op == vmOPCode.OP_PUSHTRUE):
                     # done

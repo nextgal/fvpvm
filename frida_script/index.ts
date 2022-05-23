@@ -673,26 +673,39 @@ function PrintFVPRegisters() {
 }
 
 function PrintFVPStack() {
-    let eip = new NativePointer(lpFVPVM.add(0x81c))
-    let esp = new NativePointer(eip.add(4)).readU32()
+    let esp = new NativePointer(lpFVPVM.add(0x820)).readU32()   // stack depth
 
-    let lpStackTop = lpFVPVM.add(0x8).add(esp * 8)  // big
     let lpStackButtom = lpFVPVM.add(0x8)    // little
+    let lpStackTop = lpStackButtom.add(esp * 8)  // big
 
-    console.log(`sptr: ${lpStackButtom} ${lpStackTop}`)     // l / b
+    console.log(`sptr: 0x${lpStackButtom.toString(16)} 0x${lpStackTop.toString(16)}`)     // l / b
+
+    let se = lpStackButtom.readByteArray(esp * 8 + 8)
+    if (se) {
+        console.log(hexdump(se, { header: true }))
+    }
 
     let ptr = lpStackButtom
     while (ptr <= lpStackTop) {
         let ptr2 = ptr
-        let se = ptr2.readByteArray(8)
+
         // read it!
+        /**
+            struct FVPStackEntry
+            {
+            char type;
+            char unk;
+            __int16 stackBase;
+            int value;
+            };
+         */
         let type_ = ptr2.readU8()
-        ptr2 = ptr2.add(1)
+        ptr2 = ptr2.add(1)  // move
         let unk = ptr2.readU8()
-        ptr2 = ptr2.add(1) // padding
-        let sbase = ptr2.readU16()
-        ptr2 = ptr2.add(2)
-        let value = ptr2.readS32()
+        ptr2 = ptr2.add(1)  // still move
+        let sbase = ptr2.readS16()
+        ptr2 = ptr2.add(2)  // keeps moing
+        let value = ptr2.readS32()  // ends, and no moving...
 
         // pretty 
         /* 
@@ -703,19 +716,26 @@ function PrintFVPStack() {
             T_STRING = 5,
             T_RET = 6,
         */
+
         let type_str = ""
+        let actualVal: number | string | boolean = ""
+        // 推导值
         switch (type_) {
             case 0:
                 type_str = "T_TRUE"
+                actualVal = true
                 break;
             case 1:
                 type_str = "T_FALSE"
+                actualVal = false
                 break;
             case 2:
                 type_str = "T_INT"
+                actualVal = ptr2.readS32().toString(16)
                 break;
             case 4:
                 type_str = "T_FLOAT"
+                actualVal = ptr2.readFloat().toString(16)
                 break;
             case 5:
                 type_str = "T_STRING"
@@ -728,8 +748,7 @@ function PrintFVPStack() {
                 break;
         }
         // print
-        console.log(`stack entry: ${type_str} ${unk} ${sbase} ${value}`)
-
+        console.log(`stack entry: type: ${type_str} unk1: ${unk} sbase: ${sbase} value: ${actualVal} / ${value}`)
         // next one
         ptr = ptr.add(8)
     }
