@@ -7,6 +7,7 @@
 from email import header
 from xmlrpc.client import boolean
 import idaapi
+from idaapi import *
 import ida_idp
 import idc
 import struct
@@ -202,6 +203,10 @@ def load_file(li: idaapi.loader_input_t, neflags: int, format: str) -> boolean:
                         ".imptable", "CONST")  # imptable
 
         idaapi.add_entry(0, hcbEntryPoint, "entrypoint", 1)
+        
+        idx = idaapi.add_encoding("shift-jis")
+        idaapi.set_default_encoding_idx(8,idx)
+        idaapi.set_str_encoding_idx(STRTYPE_C,idx)
         return True
 
     idc.warning("Unknown format name: '%s'" % format)

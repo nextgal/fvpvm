@@ -381,6 +381,13 @@ class fvp_processor_t(idaapi.processor_t):
         all information about the instruction is in 'insn' structure.
         If zero is returned, the kernel will delete the instruction.
         """
+        # for strings
+        if insn.itype == getattr(self,"itype_"+self.instruc[0x0e]["name"]):
+            # PUSHSTR
+            idaapi.create_strlit(insn.Op2.addr,insn.Op1.value,STRTYPE_C)
+            add_cref(insn.ea, insn.ea + insn.size + insn.Op1.value, fl_F)
+            return True
+
         if insn.itype & CF_JUMP:  # JMP
             add_cref(insn.ea, insn.Op1.addr, fl_JN)
         if (insn.itype & CF_USE1) or (insn.itype & CF_USE2) or (insn.itype != 2):
@@ -389,6 +396,7 @@ class fvp_processor_t(idaapi.processor_t):
         if insn.itype & CF_CALL:
             add_cref(insn.ea, insn.ea + insn.size, fl_F)
             pass
+
         return True
 
     def ev_out_operand(self, ctx: idaapi.outctx_t, op: idaapi.op_t):
@@ -403,10 +411,7 @@ class fvp_processor_t(idaapi.processor_t):
         if op.type == o_reg:
             ctx.out_register(self.reg_names[op.reg])
         elif op.type == o_imm:
-            if op.dtype == dt_string:
-                return True
-            else:
-                ctx.out_value(op, OOFW_IMM)
+            ctx.out_value(op, OOFW_IMM)
         elif op.type == o_mem:
             ctx.out_name_expr(op, op.addr, BADADDR)
         else:
@@ -549,10 +554,8 @@ class fvp_processor_t(idaapi.processor_t):
             insn.Op1.type = o_imm
             insn.Op1.value = arg1
             insn.Op1.dtype = dt_byte
-            insn.Op2.type = o_imm
-            insn.Op2.value = insn.ip + 2
-            insn.Op2.dtype = dt_string
-            insn.size += arg1
+            insn.Op2.type = o_mem
+            insn.Op2.addr = insn.ip + 2
             pass
         elif(op == 0x0f):   # PUSHGLOBAL
             ins = self.itable[opcode]
@@ -1323,4 +1326,8 @@ class fvp_processor_t(idaapi.processor_t):
 
 
 def PROCESSOR_ENTRY():
+    idx = idaapi.add_encoding("shift-jis")
+    idaapi.set_default_encoding_idx(8,idx)
+    idaapi.set_str_encoding_idx(STRTYPE_C,idx)
+
     return fvp_processor_t()
