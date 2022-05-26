@@ -9,6 +9,9 @@
 			"*.json": "jsonc",
 			"utility": "cpp"
 		},
-		"python.languageServer": "Pylance"
+		"python.languageServer": "Pylance",
+		"python.analysis.extraPaths": [
+			"D:\\Works\\Apps\\IDA Pro 7.5\\python\\3"
+		]
 	}
 }
