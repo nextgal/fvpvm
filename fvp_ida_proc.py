@@ -3,12 +3,14 @@
 # (c) Hex-Rays
 from multiprocessing.sharedctypes import Value
 from pickletools import uint8
-from xmlrpc.client import Boolean
+from xmlrpc.client import Boolean, boolean
 import idaapi
 from idaapi import *
 import ida_pro
 
 # ----------------------------------------------------------------------
+
+
 class fvp_processor_t(idaapi.processor_t):
     """
     Processor module classes must derive from idaapi.processor_t
@@ -289,45 +291,45 @@ class fvp_processor_t(idaapi.processor_t):
                 self.cmt = cmt
         self.itable = {
             0x00: idef(name="NOP", cf=0, cmt="No operation"),
-            0x01: idef(name="INIT_STACK", cf=CF_USE2, cmt="Init function stack"),
-            0x02: idef(name="CALL",cf=CF_USE1|CF_CALL,cmt="Call a function"),
-            0x03: idef(name="SYSCALL",cf=CF_USE1,cmt="Syscall"),
-            0x04: idef(name="RET",cf=0,cmt="Return"),
-            0x05: idef(name="RET2",cf=0,cmt="Return"),
-            0x06: idef(name="JMP",cf=CF_USE1|CF_JUMP,cmt="Jump"),
-            0x07: idef(name="JMPCOND",cf=CF_USE1|CF_JUMP,cmt="Jump Conditionaly"),
-            0x08: idef(name="PUSHTRUE",cf=CF_USE1,cmt="Push True"),
-            0x09: idef(name="PUSHFALSE",cf=CF_USE1,cmt="Push False"),
-            0x0a: idef(name="PUSHI32",cf=CF_USE1,cmt="Push Integer"),
-            0x0b: idef(name="PUSHI16",cf=CF_USE1,cmt="Push Integer"),
-            0x0c: idef(name="PUSHI8",cf=CF_USE1,cmt="Push Integer"),
-            0x0d: idef(name="PUSHF32",cf=CF_USE1,cmt="Push Float"),
-            0x0e: idef(name="PUSHSTRING",cf=CF_USE2,cmt="Push String"),
-            0x0f: idef(name="PUSHGLOBAL",cf=CF_USE1,cmt="Push Global Var to stack"),
-            0x10: idef(name="PUSHSTACK",cf=CF_USE1,cmt=""),
-            0x11: idef(name="UNK11",cf=CF_USE1,cmt="unk"),
-            0x12: idef(name="UNK12",cf=CF_USE1,cmt="unk"),
-            0x13: idef(name="PUSHTOP",cf=0,cmt="Push stack entry"),
-            0x14: idef(name="PUSHTEMP",cf=0,cmt="Push temp stack entry to stack"),
-            0x15: idef(name="POPGLOBAL",cf=CF_USE1,cmt="push stack entry to global var"),
-            0x16: idef(name="COPYSTACK",cf=CF_USE1,cmt=""),
-            0x17: idef(name="UNK17",cf=CF_USE1,cmt="unk"),
-            0x18: idef(name="UNK18",cf=CF_USE1,cmt="unk"),
-            0x19: idef(name="NEG",cf=0,cmt="dec"),
-            0x1a: idef(name="ADD",cf=0,cmt="add"),
-            0x1b: idef(name="SUB",cf=0,cmt=""),
-            0x1c: idef(name="MUL",cf=0,cmt=""),
-            0x1d: idef(name="DIV",cf=0,cmt=""),
-            0x1e: idef(name="MOD",cf=0,cmt=""),
-            0x1f: idef(name="TEST",cf=0,cmt=""),
-            0x20: idef(name="LEGEND",cf=0,cmt=""),
-            0x21: idef(name="LOGOR",cf=0,cmt=""),
-            0x22: idef(name="EQ",cf=0,cmt=""),
-            0x23: idef(name="NEQ",cf=0,cmt="!eq"),
-            0x24: idef(name="QT",cf=0,cmt=""),
-            0x25: idef(name="LE",cf=0,cmt=""),
-            0x26: idef(name="LT",cf=0,cmt=""),
-            0x27: idef(name="GE",cf=0,cmt="")
+            0x01: idef(name="INIT_STACK", cf=CF_USE2 | OF_NUMBER, cmt="Init function stack"),
+            0x02: idef(name="CALL", cf=CF_USE1 | CF_CALL, cmt="Call a function"),
+            0x03: idef(name="SYSCALL", cf=CF_USE1 | CF_HLL | OF_NUMBER, cmt="Syscall"),
+            0x04: idef(name="RET", cf=CF_STOP, cmt="Return"),
+            0x05: idef(name="RET2", cf=CF_STOP, cmt="Return"),
+            0x06: idef(name="JMP", cf=CF_USE1 | CF_JUMP, cmt="Jump"),
+            0x07: idef(name="JMPCOND", cf=CF_USE1 | CF_JUMP, cmt="Jump Conditionaly"),
+            0x08: idef(name="PUSHTRUE", cf=CF_USE1, cmt="Push True"),
+            0x09: idef(name="PUSHFALSE", cf=CF_USE1, cmt="Push False"),
+            0x0a: idef(name="PUSHI32", cf=CF_USE1 | OF_NUMBER, cmt="Push Integer"),
+            0x0b: idef(name="PUSHI16", cf=CF_USE1 | OF_NUMBER, cmt="Push Integer"),
+            0x0c: idef(name="PUSHI8", cf=CF_USE1 | OF_NUMBER, cmt="Push Integer"),
+            0x0d: idef(name="PUSHF32", cf=CF_USE1 | OF_NUMBER, cmt="Push Float"),
+            0x0e: idef(name="PUSHSTRING", cf=CF_USE2, cmt="Push String"),
+            0x0f: idef(name="PUSHGLOBAL", cf=CF_USE1, cmt="Push Global Var to stack"),
+            0x10: idef(name="PUSHSTACK", cf=CF_USE1, cmt=""),
+            0x11: idef(name="UNK11", cf=CF_USE1, cmt="unk"),
+            0x12: idef(name="UNK12", cf=CF_USE1, cmt="unk"),
+            0x13: idef(name="PUSHTOP", cf=0, cmt="Push stack entry"),
+            0x14: idef(name="PUSHTEMP", cf=0, cmt="Push temp stack entry to stack"),
+            0x15: idef(name="POPGLOBAL", cf=CF_USE1, cmt="push stack entry to global var"),
+            0x16: idef(name="COPYSTACK", cf=CF_USE1, cmt=""),
+            0x17: idef(name="UNK17", cf=CF_USE1, cmt="unk"),
+            0x18: idef(name="UNK18", cf=CF_USE1, cmt="unk"),
+            0x19: idef(name="NEG", cf=0, cmt="dec"),
+            0x1a: idef(name="ADD", cf=0, cmt="add"),
+            0x1b: idef(name="SUB", cf=0, cmt=""),
+            0x1c: idef(name="MUL", cf=0, cmt=""),
+            0x1d: idef(name="DIV", cf=0, cmt=""),
+            0x1e: idef(name="MOD", cf=0, cmt=""),
+            0x1f: idef(name="TEST", cf=0, cmt=""),
+            0x20: idef(name="LEGEND", cf=0, cmt=""),
+            0x21: idef(name="LOGOR", cf=0, cmt=""),
+            0x22: idef(name="EQ", cf=0, cmt=""),
+            0x23: idef(name="NEQ", cf=0, cmt="!eq"),
+            0x24: idef(name="QT", cf=0, cmt=""),
+            0x25: idef(name="LE", cf=0, cmt=""),
+            0x26: idef(name="LT", cf=0, cmt=""),
+            0x27: idef(name="GE", cf=0, cmt="")
         }
 
         # Now create an instruction table compatible with IDA processor module requirements
@@ -348,11 +350,11 @@ class fvp_processor_t(idaapi.processor_t):
         self.operand_spaces = 1
         self.initFVPInstructions()
 
-    def asm_out_func_header(self, ctx, func_ea):
+    def asm_out_func_header(self, ctx: idaapi.outctx_t, func_ea):
         """generate function header lines"""
         pass
 
-    def asm_out_func_footer(self, ctx, func_ea):
+    def asm_out_func_footer(self, ctx: idaapi.outctx_t, func_ea):
         """generate function footer lines"""
         pass
 
@@ -379,13 +381,17 @@ class fvp_processor_t(idaapi.processor_t):
         all information about the instruction is in 'insn' structure.
         If zero is returned, the kernel will delete the instruction.
         """
-        if insn.itype == 4:  # JMP
+        if insn.itype & CF_JUMP:  # JMP
             add_cref(insn.ea, insn.Op1.addr, fl_JN)
-        elif insn.itype != 2:  # 2 == RET, 4 == JMP
+        if (insn.itype & CF_USE1) or (insn.itype & CF_USE2) or (insn.itype != 2):
+            # print("insnsize: {} ip: {}".format(insn.size, insn.ea))
             add_cref(insn.ea, insn.ea + insn.size, fl_F)
+        if insn.itype & CF_CALL:
+            add_cref(insn.ea, insn.ea + insn.size, fl_F)
+            pass
         return True
 
-    def ev_out_operand(self, ctx: idaapi.outctx_t, op):
+    def ev_out_operand(self, ctx: idaapi.outctx_t, op: idaapi.op_t):
         """
         Generate text representation of an instructon operand.
         This function shouldn't change the database, flags or anything else.
@@ -397,7 +403,10 @@ class fvp_processor_t(idaapi.processor_t):
         if op.type == o_reg:
             ctx.out_register(self.reg_names[op.reg])
         elif op.type == o_imm:
-            ctx.out_value(op, OOFW_IMM)
+            if op.dtype == dt_string:
+                return True
+            else:
+                ctx.out_value(op, OOFW_IMM)
         elif op.type == o_mem:
             ctx.out_name_expr(op, op.addr, BADADDR)
         else:
@@ -432,8 +441,9 @@ class fvp_processor_t(idaapi.processor_t):
         Decodes an instruction into insn
         Returns: insn.size (=the size of the decoded instruction) or zero
         """
+        insn.size = 0
         opcode: uint8 = insn.get_next_byte()
-        # just LUT
+                # just LUT
         op = opcode
         if(op == 0x00): # NOP
             ins = self.itable[opcode]
@@ -539,8 +549,10 @@ class fvp_processor_t(idaapi.processor_t):
             insn.Op1.type = o_imm
             insn.Op1.value = arg1
             insn.Op1.dtype = dt_byte
-            for i in range(0,arg1):
-                insn.get_next_byte()
+            insn.Op2.type = o_imm
+            insn.Op2.value = insn.ip + 2
+            insn.Op2.dtype = dt_string
+            insn.size += arg1
             pass
         elif(op == 0x0f):   # PUSHGLOBAL
             ins = self.itable[opcode]
@@ -680,23 +692,23 @@ class fvp_processor_t(idaapi.processor_t):
     # The following callbacks are optional.
     # *** Please remove the callbacks that you don't plan to implement ***
 
-    def ev_out_header(self, ctx):
+    def ev_out_header(self, ctx: idaapi.outctx_t):
         """function to produce start of disassembled text"""
         return 0
 
-    def ev_out_footer(self, ctx):
+    def ev_out_footer(self, ctx: idaapi.outctx_t):
         """function to produce end of disassembled text"""
         return 0
 
-    def ev_out_segstart(self, ctx, segment):
+    def ev_out_segstart(self, ctx: idaapi.outctx_t, segment):
         """function to produce start of segment"""
         return 0
 
-    def ev_out_segend(self, ctx, segment):
+    def ev_out_segend(self, ctx: idaapi.outctx_t, segment):
         """function to produce end of segment"""
         return 0
 
-    def ev_out_assumes(self, ctx):
+    def ev_out_assumes(self, ctx: idaapi.outctx_t):
         """function to produce assume directives"""
         return 0
 

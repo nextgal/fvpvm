@@ -202,7 +202,6 @@ def load_file(li: idaapi.loader_input_t, neflags: int, format: str) -> boolean:
                         ".imptable", "CONST")  # imptable
 
         idaapi.add_entry(0, hcbEntryPoint, "entrypoint", 1)
-        print("Load OK")
         return True
 
     idc.warning("Unknown format name: '%s'" % format)
