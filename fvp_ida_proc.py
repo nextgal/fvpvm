@@ -7,6 +7,7 @@ from xmlrpc.client import Boolean, boolean
 import idaapi
 from idaapi import *
 import ida_pro
+import idc
 
 # ----------------------------------------------------------------------
 
@@ -83,7 +84,7 @@ class fvp_processor_t(idaapi.processor_t):
 
     instruc = []
     # icode of the last instruction + 1
-    instruc_end = len(instruc)
+    instruc_end = 0
 
     # Size of long double (tbyte) for this processor (meaningful only if ash.a_tbyte != NULL) (optional)
     tbyte_size = 0
@@ -104,7 +105,7 @@ class fvp_processor_t(idaapi.processor_t):
 
     # icode (or instruction number) of return instruction. It is ok to give any of possible return
     # instructions
-    icode_return = 5
+    icode_return = 4
 
     # only one assembler is supported
     assembler = {
@@ -349,6 +350,9 @@ class fvp_processor_t(idaapi.processor_t):
         self.operand_separator = ','
         self.operand_spaces = 1
         self.initFVPInstructions()
+        self.instruc_end = len(self.instruc)
+        self.syscall = []
+        self.syscallInited = False
 
     def asm_out_func_header(self, ctx: idaapi.outctx_t, func_ea):
         """generate function header lines"""
@@ -382,19 +386,25 @@ class fvp_processor_t(idaapi.processor_t):
         If zero is returned, the kernel will delete the instruction.
         """
         # for strings
-        if insn.itype == getattr(self,"itype_"+self.instruc[0x0e]["name"]):
+        if insn.itype == getattr(self, "itype_"+self.instruc[0x0e]["name"]):
             # PUSHSTR
-            idaapi.create_strlit(insn.Op2.addr,insn.Op1.value,STRTYPE_C)
+            idaapi.create_strlit(insn.Op2.addr, insn.Op1.value, STRTYPE_C)
             add_cref(insn.ea, insn.ea + insn.size + insn.Op1.value, fl_F)
+            add_dref(insn.ea, insn.ea+2, dr_T | dr_R)
             return True
 
         if insn.itype & CF_JUMP:  # JMP
             add_cref(insn.ea, insn.Op1.addr, fl_JN)
+        if insn.itype & CF_CALL:
+            add_cref(insn.ea, insn.Op1.addr, fl_CN)
+            add_cref(insn.ea, insn.ea + insn.size, fl_F)
+            pass
         if (insn.itype & CF_USE1) or (insn.itype & CF_USE2) or (insn.itype != 2):
             # print("insnsize: {} ip: {}".format(insn.size, insn.ea))
             add_cref(insn.ea, insn.ea + insn.size, fl_F)
-        if insn.itype & CF_CALL:
-            add_cref(insn.ea, insn.ea + insn.size, fl_F)
+        if insn.itype == getattr(self, "itype_"+self.instruc[0x03]["name"]):
+            idc.set_cmt(insn.ea, self.syscall[insn.Op1.value]["sym"], False)
+            add_dref(insn.ea, self.syscall[insn.Op1.value]["addr"], dr_I)
             pass
 
         return True
@@ -446,17 +456,40 @@ class fvp_processor_t(idaapi.processor_t):
         Decodes an instruction into insn
         Returns: insn.size (=the size of the decoded instruction) or zero
         """
+
+        if(self.syscallInited != True):
+            ep = idaapi.get_dword(0)
+            ep += 0x50
+            seg: idaapi.segment_t = idaapi.get_segm_by_name(".imptable")
+            ptr = seg.start_ea
+            syscallSize = idaapi.get_word(ptr)
+            ptr += 2
+            for i in range(syscallSize):
+                idx = i
+                type = idaapi.get_byte(ptr)
+                ptr += 1
+                symlen = idaapi.get_byte(ptr)
+                ptr += 1
+                addr = ptr
+                sym: bytes = idaapi.get_bytes(ptr, symlen - 1, 0)
+                symname = sym.decode(encoding="ascii")
+                ptr += symlen
+                self.syscall.append(
+                    {"argsnum": type, "sym": symname, "addr": addr})
+                pass
+            self.syscallInited = True
+
         insn.size = 0
         opcode: uint8 = insn.get_next_byte()
-                # just LUT
+        # just LUT
         op = opcode
-        if(op == 0x00): # NOP
+        if(op == 0x00):  # NOP
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             pass
         elif(op == 0x01):   # INITSTACK
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             arg1 = insn.get_next_byte()
             arg2 = insn.get_next_byte()
             insn.Op1.type = o_imm
@@ -468,15 +501,14 @@ class fvp_processor_t(idaapi.processor_t):
             pass
         elif(op == 0x02):   # CALL
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             arg1 = insn.get_next_dword()
-            insn.Op1.type = o_imm
-            insn.Op1.value = arg1
-            insn.Op1.dtype = dt_dword
+            insn.Op1.type = o_mem
+            insn.Op1.addr = arg1
             pass
         elif(op == 0x03):   # SYSCALL
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             arg1 = insn.get_next_byte()
             insn.Op1.type = o_imm
             insn.Op1.value = arg1
@@ -484,15 +516,15 @@ class fvp_processor_t(idaapi.processor_t):
             pass
         elif(op == 0x04):   # RET
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             pass
         elif(op == 0x05):   # RET2
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             pass
         elif(op == 0x06):   # JMP
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             arg1 = insn.get_next_dword()
             insn.Op1.type = o_imm
             insn.Op1.value = arg1
@@ -500,7 +532,7 @@ class fvp_processor_t(idaapi.processor_t):
             pass
         elif(op == 0x07):   # JMPCOND
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             arg1 = insn.get_next_dword()
             # print("0x{:x}".format(arg1))
             insn.Op1.type = o_imm
@@ -509,15 +541,15 @@ class fvp_processor_t(idaapi.processor_t):
             pass
         elif(op == 0x08):   # PUSHTRUE
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             pass
         elif(op == 0x09):   # PUSHFALSE
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             pass
         elif(op == 0x0a):   # PUSHI32
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             arg1 = insn.get_next_dword()
             insn.Op1.type = o_imm
             insn.Op1.value = arg1
@@ -525,7 +557,7 @@ class fvp_processor_t(idaapi.processor_t):
             pass
         elif(op == 0x0b):   # PUSHI16
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             arg1 = insn.get_next_word()
             insn.Op1.type = o_imm
             insn.Op1.value = arg1
@@ -533,7 +565,7 @@ class fvp_processor_t(idaapi.processor_t):
             pass
         elif(op == 0x0c):   # PUSHI8
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             arg1 = insn.get_next_byte()
             insn.Op1.type = o_imm
             insn.Op1.value = arg1
@@ -541,7 +573,7 @@ class fvp_processor_t(idaapi.processor_t):
             pass
         elif(op == 0x0d):   # PUSHF32
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             arg1 = insn.get_next_dword()
             insn.Op1.type = o_imm
             insn.Op1.value = arg1
@@ -549,7 +581,7 @@ class fvp_processor_t(idaapi.processor_t):
             pass
         elif(op == 0x0e):   # PUSHSTRING
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             arg1 = insn.get_next_byte()
             insn.Op1.type = o_imm
             insn.Op1.value = arg1
@@ -559,7 +591,7 @@ class fvp_processor_t(idaapi.processor_t):
             pass
         elif(op == 0x0f):   # PUSHGLOBAL
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             arg1 = insn.get_next_word()
             insn.Op1.type = o_imm
             insn.Op1.value = arg1
@@ -567,7 +599,7 @@ class fvp_processor_t(idaapi.processor_t):
             pass
         elif(op == 0x10):   # PUSHSTACK
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             arg1 = insn.get_next_byte()
             insn.Op1.type = o_imm
             insn.Op1.value = arg1
@@ -575,7 +607,7 @@ class fvp_processor_t(idaapi.processor_t):
             pass
         elif(op == 0x11):   # UNK11
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             arg1 = insn.get_next_word()
             insn.Op1.type = o_imm
             insn.Op1.value = arg1
@@ -583,7 +615,7 @@ class fvp_processor_t(idaapi.processor_t):
             pass
         elif(op == 0x12):   # UNK12
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             arg1 = insn.get_next_byte()
             insn.Op1.type = o_imm
             insn.Op1.value = arg1
@@ -591,15 +623,15 @@ class fvp_processor_t(idaapi.processor_t):
             pass
         elif(op == 0x13):   # PUSHTOP
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             pass
         elif(op == 0x14):   # PUSHTEMP
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             pass
         elif(op == 0x15):   # POPGLOBAL
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             arg1 = insn.get_next_word()
             insn.Op1.type = o_imm
             insn.Op1.value = arg1
@@ -607,7 +639,7 @@ class fvp_processor_t(idaapi.processor_t):
             pass
         elif(op == 0x16):   # COPYSTACK
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             arg1 = insn.get_next_byte()
             insn.Op1.type = o_imm
             insn.Op1.value = arg1
@@ -615,7 +647,7 @@ class fvp_processor_t(idaapi.processor_t):
             pass
         elif(op == 0x17):   # UNK17
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             arg1 = insn.get_next_word()
             insn.Op1.type = o_imm
             insn.Op1.value = arg1
@@ -623,7 +655,7 @@ class fvp_processor_t(idaapi.processor_t):
             pass
         elif(op == 0x18):   # UNK18
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             arg1 = insn.get_next_byte()
             insn.Op1.type = o_imm
             insn.Op1.value = arg1
@@ -631,63 +663,63 @@ class fvp_processor_t(idaapi.processor_t):
             pass
         elif(op == 0x19):   # NEG
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             pass
         elif(op == 0x1a):   # ADD
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             pass
         elif(op == 0x1b):   # SUB
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             pass
         elif(op == 0x1c):   # MUL
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             pass
         elif(op == 0x1d):   # DIV
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             pass
         elif(op == 0x1e):   # MOD
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             pass
         elif(op == 0x1f):   # TEST
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             pass
         elif(op == 0x20):   # LEGEND
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             pass
         elif(op == 0x21):   # LOGOR
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             pass
         elif(op == 0x22):   # EQ
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             pass
         elif(op == 0x23):   # NEQ
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             pass
         elif(op == 0x24):   # QT
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             pass
         elif(op == 0x25):   # LE
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             pass
         elif(op == 0x26):   # LT
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             pass
         elif(op == 0x27):   # GE
             ins = self.itable[opcode]
-            insn.itype = getattr(self,"itype_"+ins.name)
+            insn.itype = getattr(self, "itype_"+ins.name)
             pass
 
         return True
@@ -1326,8 +1358,4 @@ class fvp_processor_t(idaapi.processor_t):
 
 
 def PROCESSOR_ENTRY():
-    idx = idaapi.add_encoding("shift-jis")
-    idaapi.set_default_encoding_idx(8,idx)
-    idaapi.set_str_encoding_idx(STRTYPE_C,idx)
-
     return fvp_processor_t()

@@ -203,10 +203,53 @@ def load_file(li: idaapi.loader_input_t, neflags: int, format: str) -> boolean:
                         ".imptable", "CONST")  # imptable
 
         idaapi.add_entry(0, hcbEntryPoint, "entrypoint", 1)
-        
-        idx = idaapi.add_encoding("shift-jis")
-        idaapi.set_default_encoding_idx(8,idx)
-        idaapi.set_str_encoding_idx(STRTYPE_C,idx)
+        idaapi.add_encoding("shift-jis")
+
+        # interpret .hcbinfo segment
+        ptr = headerOffset
+        idc.create_dword(ptr)
+        idc.set_cmt(ptr, "FVP Entrypoint", False)
+        ptr += 4
+        idc.create_word(ptr)
+        idc.set_cmt(ptr, "count1", False)
+        ptr += 2
+        idc.create_word(ptr)
+        idc.set_cmt(ptr, "count2", False)
+        ptr += 2
+        idc.create_word(ptr)
+        idc.set_cmt(ptr, "resMode", False)
+        ptr += 2
+        idc.create_byte(ptr)
+        idc.set_cmt(ptr, "titleLength", False)
+        ptr += 1
+        idaapi.create_strlit(ptr, titleLen, STRTYPE_C)
+        idc.set_cmt(ptr, "gameTitle", False)
+
+        # interpret .imptable segment
+        ptr += titleLen
+        impTableSize = idaapi.get_word(ptr)
+        idc.create_word(ptr)
+        idc.set_cmt(ptr, "importTableLength", False)
+        ptr += 2
+
+        for i in range(impTableSize):
+            r_ptr = ptr  # backup
+            size = 0
+            idaapi.add_extra_line(ptr,True,"Syscall 0x{:0>2x}".format(i))
+            idc.create_byte(ptr)
+            idc.set_cmt(ptr, "type", False)
+            ptr += 1
+            idc.create_byte(ptr)
+            idc.set_cmt(ptr, "symbolLength", False)
+            symLen = idaapi.get_byte(ptr)
+            ptr += 1
+            symName = idaapi.get_bytes(ptr,symLen,0)
+            idaapi.create_strlit(ptr, symLen, STRTYPE_C)
+            idc.set_cmt(ptr, "symbolName", False)
+
+            ptr += symLen
+            pass
+
         return True
 
     idc.warning("Unknown format name: '%s'" % format)
