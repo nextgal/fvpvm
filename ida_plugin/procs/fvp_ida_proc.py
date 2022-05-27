@@ -39,11 +39,11 @@ class fvp_processor_t(idaapi.processor_t):
 
     # short processor names
     # Each name should be shorter than 9 characters
-    psnames = ['fvp_vm_proc']
+    psnames = ['fvp_vm']
 
     # long processor names
     # No restriction on name lengthes.
-    plnames = ['Processor module for FVP VM']
+    plnames = ['Favorite FVP VM Processor module']
 
     # register names
     reg_names = [

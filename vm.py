@@ -392,7 +392,7 @@ class vm():
                     pass
                 elif(op == vmOPCode.OP_RET):
                     print()
-                    assert(self.stack[self.sp].type == vmVarType.T_RET)
+                    # assert(self.stack[self.sp].type == vmVarType.T_RET)
                     s1 = self.popStack()
                     self.moveIP(s1.data)
                     s2 = self.popStack()

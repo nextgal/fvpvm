@@ -14,7 +14,7 @@ import struct
 from enum import Enum, unique
 from array import array
 
-RomFormatName = "Favorite FVP VM Binary"
+RomFormatName = "Favorite FVP VM executable"
 
 # -----------------------------------------------------------------------
 
@@ -135,24 +135,24 @@ def accept_file(li: idaapi.loader_input_t, filename: str):
     # our works
     if(li.size() >= 10000000):    # 10M
         return 0
-    hcb = hcbReader(li)
-    headerOffset = hcb.readU32()
+
     try:
+        hcb = hcbReader(li)
+        headerOffset = hcb.readU32()
+
         hcb.seek(headerOffset, seekPosition.SEEK_SET)
+        hcbEntryPoint = hcb.readU32()
+        count1 = hcb.readU16()
+        count2 = hcb.readU16()
+        resMode = hcb.readI16()
+        titleLen = hcb.readU8()
+        gameTitle = hcb.readString(titleLen)
+
+        # check signature
+        return {'format': RomFormatName, 'processor': 'fvp_vm'}
+
     except Exception:
         return 0
-    hcbEntryPoint = hcb.readU32()
-    count1 = hcb.readU16()
-    count2 = hcb.readU16()
-    resMode = hcb.readI16()
-    titleLen = hcb.readU8()
-    gameTitle = hcb.readString(titleLen)
-
-    # check signature
-    return {'format': RomFormatName, 'processor': 'fvp_vm_proc'}
-
-    # unrecognized format
-    return 0
 
 # -----------------------------------------------------------------------
 
@@ -167,7 +167,7 @@ def load_file(li: idaapi.loader_input_t, neflags: int, format: str) -> boolean:
     """
 
     if format == RomFormatName:
-        proc = {'format': RomFormatName, 'processor': 'fvp_vm_proc'}
+        proc = {'format': RomFormatName, 'processor': 'fvp_vm'}
         idaapi.set_processor_type(proc["processor"], ida_idp.SETPROC_LOADER)
 
         if(li.size() >= 10000000):    # 10M
@@ -235,7 +235,7 @@ def load_file(li: idaapi.loader_input_t, neflags: int, format: str) -> boolean:
         for i in range(impTableSize):
             r_ptr = ptr  # backup
             size = 0
-            idaapi.add_extra_line(ptr,True,"Syscall 0x{:0>2x}".format(i))
+            idaapi.add_extra_line(ptr, True, "Syscall 0x{:0>2x}".format(i))
             idc.create_byte(ptr)
             idc.set_cmt(ptr, "type", False)
             ptr += 1
@@ -243,7 +243,7 @@ def load_file(li: idaapi.loader_input_t, neflags: int, format: str) -> boolean:
             idc.set_cmt(ptr, "symbolLength", False)
             symLen = idaapi.get_byte(ptr)
             ptr += 1
-            symName = idaapi.get_bytes(ptr,symLen,0)
+            symName = idaapi.get_bytes(ptr, symLen, 0)
             idaapi.create_strlit(ptr, symLen, STRTYPE_C)
             idc.set_cmt(ptr, "symbolName", False)
 
