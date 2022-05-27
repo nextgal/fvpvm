@@ -509,10 +509,10 @@ class fvp_processor_t(idaapi.processor_t):
         elif(op == 0x03):   # SYSCALL
             ins = self.itable[opcode]
             insn.itype = getattr(self, "itype_"+ins.name)
-            arg1 = insn.get_next_byte()
+            arg1 = insn.get_next_word()
             insn.Op1.type = o_imm
             insn.Op1.value = arg1
-            insn.Op1.dtype = dt_byte
+            insn.Op1.dtype = dt_word
             pass
         elif(op == 0x04):   # RET
             ins = self.itable[opcode]
